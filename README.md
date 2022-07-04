@@ -1,4 +1,4 @@
-# Microtest
+# Deben Microtest
 EPICS Support for Deben Microtest tensile/compression stages.
 
 A simple Asyn-Driver to control the Deben Microtest software via EPICS. Not all possible commands are implemented.
