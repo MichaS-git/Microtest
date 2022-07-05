@@ -1,0 +1,158 @@
+# Microtest commands related records
+
+record(bo,		"$(P):Mode") {
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR))Mode")
+    field(PINI, "NO")
+    field(VAL,  "0")
+	field(ZNAM, "Tensile")
+    field(ONAM, "Compression")
+}
+
+record(mbbo,    "$(P):MotorSpeed") {
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR))MotorSpeed")
+    field(PINI, "NO")
+    field(ZRST, "0.1 mm/min")
+    field(ZRVL, "0")
+    field(ONST, "0.2 mm/min")
+    field(ONVL, "1")
+    field(TWST, "0.5 mm/min")
+    field(TWVL, "2")
+    field(THST, "0.75 mm/min")
+    field(THVL, "3")
+    field(FRST, "1.0 mm/min")
+    field(FRVL, "4")
+}
+
+record(mbbi,    "$(P):MotorSpeed_RBV") {
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR))MotorSpeed_RBV")
+    field(ZRST, "0.1 mm/min")
+    field(ZRVL, "0")
+    field(ONST, "0.2 mm/min")
+    field(ONVL, "1")
+    field(TWST, "0.5 mm/min")
+    field(TWVL, "2")
+    field(THST, "0.75 mm/min")
+    field(THVL, "3")
+    field(FRST, "1.0 mm/min")
+    field(FRVL, "4")
+    field(SCAN, "1 second")
+}
+
+record(ai,		"$(P):Running")
+{
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR))Running")
+    field(PINI, "NO")
+    field(SCAN, "1 second")
+}
+
+record(bo,		"$(P):StopMotor") {
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR))StopMotor")
+    field(PINI, "NO")
+    field(VAL,  "0")
+    field(ZNAM, "Start")
+    field(ONAM, "Stop")
+}
+
+record(ao,		"$(P):Load")
+{
+    field(PINI, "NO")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR))Load")
+    field(PREC, "2")
+}
+
+record(ai,		"$(P):Force_RBV")
+{
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR))Force_RBV")
+    field(PINI, "NO")
+    field(PREC, 2)
+    field(SCAN, "1 second")
+    field(LOLO, -9000)
+    field(LLSV, "MAJOR")
+}
+
+record(ao,		"$(P):Extension")
+{
+    field(PINI, "NO")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR))Extension")
+    field(PREC, "3")
+}
+
+record(ai,		"$(P):Extension_RBV")
+{
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR))Extension_RBV")
+    field(PINI, "NO")
+    field(PREC, 3)
+    field(SCAN, "1 second")
+}
+
+record(ai,		"$(P):StartPosition")
+{
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT),$(ADDR))StartPosition")
+    field(PINI, "NO")
+    field(PREC, 3)
+    field(SCAN, "1 second")
+}
+
+record(ao,		"$(P):AbsolutePosition")
+{
+    field(PINI, "NO")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT),$(ADDR))AbsolutePosition")
+    field(PREC, "3")
+}
+
+record(calc,	"$(P):AbsolutePosition_RBV")
+{
+    field(CALC, "A-B")
+    field(INPA, "$(P):StartPosition  CP MS")
+    field(INPB, "$(P):Extension_RBV  CP MS")
+    field(PREC, 3)
+}
+
+# Soft motors: absolute, extension, load
+
+record(motor,   "$(P):LoadMotor")
+{
+  field(DTYP, "Soft Channel")
+  field(DESC, "input load")
+  field(OUT, "$(P):Load PP MS")
+  field(RDBL, "$(P):Force_RBV NPP MS")
+  field(URIP, "Yes")
+  field(RRES, "1")
+  field(EGU, "N")
+#  field(LLM, "0")
+#  field(HLM, "1100")
+# % this fields are maybe not correct but it works with it
+#  field(RTRY, "9999")
+  field(MRES, "1")
+  field(RDBD, "1")
+  field(STOO, "$(P):StopMotor PP")
+}
+
+record(motor,   "$(P):AbsoluteMotor")
+{
+  field(DTYP, "Soft Channel")
+  field(DESC, "input absolute position")
+  field(OUT, "$(P):AbsolutePosition PP MS")
+  field(RDBL, "$(P):AbsolutePosition_RBV NPP MS")
+  field(URIP, "Yes")
+  field(RRES, "1")
+  field(EGU, "mm")
+#  field(LLM, "0")
+#  field(HLM, "1100")
+# % this fields are maybe not correct but it works with it
+#  field(RTRY, "9999")
+  field(MRES, "1")
+  field(RDBD, "1")
+  field(STOO, "$(P):StopMotor PP")
+}
