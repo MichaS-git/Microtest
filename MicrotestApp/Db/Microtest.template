@@ -41,11 +41,11 @@ record(mbbi,    "$(P):MotorSpeed_RBV") {
     field(SCAN, "1 second")
 }
 
-record(ai,		"$(P):Running")
+record(ai,		"$(P):MovingDone")
 {
     field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT),$(ADDR))Running")
-    field(PINI, "NO")
+    field(INP,  "@asyn($(PORT),$(ADDR))MovingDone")
+    field(PINI, "YES")
     field(SCAN, "1 second")
 }
 
@@ -89,7 +89,7 @@ record(ai,		"$(P):Extension_RBV")
 {
     field(DTYP, "asynFloat64")
     field(INP,  "@asyn($(PORT),$(ADDR))Extension_RBV")
-    field(PINI, "NO")
+    field(PINI, "YES")
     field(PREC, 3)
     field(SCAN, "1 second")
 }
@@ -113,10 +113,12 @@ record(ao,		"$(P):AbsolutePosition")
 
 record(calc,	"$(P):AbsolutePosition_RBV")
 {
-    field(CALC, "A-B")
+    field(CALC, "C>0?A-B:A+B")
     field(INPA, "$(P):StartPosition  CP MS")
     field(INPB, "$(P):Extension_RBV  CP MS")
+    field(INPC, "$(P):Mode NPP MS")
     field(PREC, 3)
+    field(PINI, "YES")
 }
 
 # Soft motors: absolute, extension, load
@@ -130,13 +132,11 @@ record(motor,   "$(P):LoadMotor")
   field(URIP, "Yes")
   field(RRES, "1")
   field(EGU, "N")
-#  field(LLM, "0")
-#  field(HLM, "1100")
-# % this fields are maybe not correct but it works with it
-#  field(RTRY, "9999")
-  field(MRES, "1")
-  field(RDBD, "1")
+  field(RTRY, "0")
+  field(MRES, "0.01")
+  field(RDBD, "0.1")
   field(STOO, "$(P):StopMotor PP")
+  field(DINP, "$(P):MovingDone NPP NMS")
 }
 
 record(motor,   "$(P):AbsoluteMotor")
@@ -148,11 +148,25 @@ record(motor,   "$(P):AbsoluteMotor")
   field(URIP, "Yes")
   field(RRES, "1")
   field(EGU, "mm")
-#  field(LLM, "0")
-#  field(HLM, "1100")
-# % this fields are maybe not correct but it works with it
-#  field(RTRY, "9999")
-  field(MRES, "1")
-  field(RDBD, "1")
+  field(RTRY, "0")
+  field(MRES, "0.001")
+  field(RDBD, "0.01")
   field(STOO, "$(P):StopMotor PP")
+  field(DINP, "$(P):MovingDone NPP NMS")
+}
+
+record(motor,   "$(P):ExtensionMotor")
+{
+  field(DTYP, "Soft Channel")
+  field(DESC, "input desired extension")
+  field(OUT, "$(P):Extension PP MS")
+  field(RDBL, "$(P):Extension_RBV NPP MS")
+  field(URIP, "Yes")
+  field(RRES, "1")
+  field(EGU, "mm")
+  field(RTRY, "0")
+  field(MRES, "0.001")
+  field(RDBD, "0.01")
+  field(STOO, "$(P):StopMotor PP")
+  field(DINP, "$(P):MovingDone NPP NMS")
 }

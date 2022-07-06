@@ -135,9 +135,9 @@ text {
 		clr=16
 	}
 	"dynamic attribute" {
-		vis="if zero"
+		vis="if not zero"
 		calc="A"
-		chan="$(P):Running"
+		chan="$(P):MovingDone"
 	}
 	textix="Idle"
 }
@@ -152,9 +152,9 @@ text {
 		clr=30
 	}
 	"dynamic attribute" {
-		vis="if not zero"
+		vis="if zero"
 		calc="A"
-		chan="$(P):Running"
+		chan="$(P):MovingDone"
 	}
 	textix="Running"
 }
@@ -498,7 +498,7 @@ menu {
 		height=20
 	}
 	control {
-		chan="$(P):Running.SCAN"
+		chan="$(P):MovingDone.SCAN"
 		clr=14
 		bclr=51
 	}

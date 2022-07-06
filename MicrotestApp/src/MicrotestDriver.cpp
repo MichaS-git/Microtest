@@ -12,7 +12,7 @@ static const char *driverName = "Microtest";
 
 #define Mode			    "Mode"
 #define StopMotor			"StopMotor"
-#define Running			    "Running"
+#define MovingDone			"MovingDone"
 #define Load			    "Load"
 #define Force			    "Force_RBV"
 #define Extension		    "Extension"
@@ -37,7 +37,7 @@ public:
 protected:
 
     int Mode_;
-    int Running_;
+    int MovingDone_;
     int Load_;
     int Force_;
     int Extension_;
@@ -69,7 +69,7 @@ Microtest::Microtest(const char *portName)
     createParam(StopMotor,			asynParamInt32,		&StopMotor_);
     createParam(MotorSpeed,			asynParamInt32,		&MotorSpeed_);
     createParam(MotorSpeedRBV,		asynParamInt32,		&MotorSpeedRBV_);
-    createParam(Running,		    asynParamInt32,	    &Running_);
+    createParam(MovingDone,		    asynParamInt32,	    &MovingDone_);
     createParam(Load,			    asynParamFloat64,	&Load_);
     createParam(Force,			    asynParamFloat64,	&Force_);
     createParam(Extension,		    asynParamFloat64,	&Extension_);
@@ -85,12 +85,9 @@ Microtest::Microtest(const char *portName)
 	std::cout << "Microtest DLL";
 	std::cout << "  Version " << vermaj << "." << vermin << std::endl;
 
-    MT_Connect();
 	// set the proper motor speed at start
-	//speedIndex = MT_GetMotorSpeedIndex();
+    MT_Connect();
 	setIntegerParam(MotorSpeed_, MT_GetMotorSpeedIndex());
-
-    //callParamCallbacks();
 
     // Free the Library, otherwise it will be blocked
     FreeLibrary((HMODULE)hLib);
@@ -147,11 +144,20 @@ asynStatus Microtest::readInt32(asynUser *pasynUser, epicsInt32 *value)
         *value = intVal;
         setIntegerParam(addr, MotorSpeedRBV_, *value);
     }
-    if (function == Running_)
+    if (function == MovingDone_)
     {
         intVal = MT_IsMotorRunning();
         *value = intVal;
-        setIntegerParam(addr, Running_, *value);
+        if (*value)
+        {
+            *value = 0;
+            setIntegerParam(addr, MovingDone_, *value);
+        }
+        else
+        {
+            *value = 1;
+            setIntegerParam(addr, MovingDone_, *value);
+        }
     }
 
     // Other functions we call the base class method
