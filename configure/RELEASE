@@ -21,16 +21,18 @@
 # Build variables that are NOT used in paths should be set in
 # the CONFIG_SITE file.
 
-SUPPORT=C:/epics/inst-7.0.6
+SUPPORT=C:/epics/inst-7.0
 
 # Variables and paths to dependent modules:
-ASYN=$(SUPPORT)/asyn-R4-42
+ASYN=$(SUPPORT)/asyn
+MOTOR=$(SUPPORT)/motor
+MICROTEST=$(SUPPORT)/Microtest
 
 # If using the sequencer, point SNCSEQ at its top directory:
 #SNCSEQ = $(MODULES)/seq-ver
 
 # EPICS_BASE should appear last so earlier modules can override stuff:
-EPICS_BASE = C:/epics/base-7.0.6
+EPICS_BASE = C:/epics/base-7.0
 
 # Set RULES here if you want to use build rules from somewhere
 # other than EPICS_BASE:

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2006 Argonne National Laboratory
+#
+# SPDX-License-Identifier: EPICS
+
 # CONFIG_SITE
 
 # Make any application-specific changes to the EPICS build
@@ -41,4 +45,3 @@ CHECK_RELEASE = YES
 -include $(TOP)/../CONFIG_SITE.local
 -include $(TOP)/configure/CONFIG_SITE.local
 
-BUILD_IOCS = YES

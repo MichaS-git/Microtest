@@ -1,0 +1,7 @@
+# RELEASE - Location of external support modules
+
+# This module
+include $(TOP)/../../configure/RELEASE
+
+# Use microtestIOC's RELEASE.local when building outside this module
+-include $(TOP)/configure/RELEASE.local

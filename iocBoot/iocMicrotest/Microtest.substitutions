@@ -1,6 +1,0 @@
-file "$(MICROTEST)/MicrotestApp/Db/Microtest.template"
-{
-pattern
-{    P,        PORT,       ADDR}
-{   Deben,   Microtest,     0}
-}

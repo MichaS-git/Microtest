@@ -1,41 +1,52 @@
+/*
+ * All DLL access is handled in the poller thread to guarantee
+ * single-threaded interaction with the vendor library.
+ *
+ * EPICS record callbacks may be executed from multiple threads.
+ * To avoid unsafe concurrent DLL calls, write callbacks only set
+ * command flags and parameters, while the poller performs all
+ * hardware communication.
+ */
+
 #include "MTDDE.h" // Include the Microtest header file
 #include <windows.h>
 #include <iostream>
-#include <conio.h>
 
 #include <iocsh.h>
 #include <epicsExport.h>
 #include <asynPortDriver.h>
 
-
 static const char *driverName = "Microtest";
 
-#define Mode			    "Mode"
-#define StopMotor			"StopMotor"
-#define MovingDone			"MovingDone"
-#define Load			    "Load"
-#define Force			    "Force_RBV"
-#define Extension		    "Extension"
-#define ExtensionRBV		"Extension_RBV"
-#define StartPosition	    "StartPosition"
-#define AbsolutePosition    "AbsolutePosition"
-#define MotorSpeed			"MotorSpeed"
-#define MotorSpeedRBV		"MotorSpeed_RBV"
+#define Mode                    "Mode"
+#define StopMotor               "StopMotor"
+#define MovingDone              "MovingDone"
+#define Load                    "Load"
+#define Force                   "Force_RBV"
+#define Extension               "Extension"
+#define ExtensionRBV            "Extension_RBV"
+#define StartPosition           "StartPosition"
+#define AbsolutePosition        "AbsolutePosition"
+#define MotorSpeed              "MotorSpeed"
+#define MotorSpeedRBV           "MotorSpeed_RBV"
+#define UseForceStability       "UseForceStability"
+#define ForceDeltaPercent       "ForceDeltaPercent"
+#define ForceDeltaPercentRBV    "ForceDeltaPercent_RBV"
+#define ForceStableTime         "ForceStableTime"
+#define ForceStableTimeRBV      "ForceStableTime_RBV"
+#define ForceThreshold          "ForceThreshold"
 
 /* Class definition for the Microtest */
 class Microtest : public asynPortDriver
 {
 public:
-    Microtest(const char *portName);
+    Microtest(const char *portName, const char *dllPath);
+    virtual ~Microtest();
 
-    /* These are the methods that we override from asynPortDriver */
     asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
-    asynStatus readInt32(asynUser *pasynUser, epicsInt32 *value);
     asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
-    asynStatus readFloat64(asynUser *pasynUser, epicsFloat64 *value);
 
 protected:
-
     int Mode_;
     int MovingDone_;
     int Load_;
@@ -47,296 +58,363 @@ protected:
     int StopMotor_;
     int MotorSpeed_;
     int MotorSpeedRBV_;
+    int UseForceStability_;
+    int ForceDeltaPercent_;
+    int ForceDeltaPercentRBV_;
+    int ForceStableTime_;
+    int ForceStableTimeRBV_;
+    int ForceThreshold_;
 
 private:
+    epicsThreadId pollerThreadId;
+    bool pollerRunning;
     HINSTANCE hLib;
+    epicsMutexId dllLock;
+    std::string dllPath_;
 
-    void loadLibrary();
+    /* ===== Funktionspointer aus der Microtest-DLL ===== */
+    DLL_MT_NoParams   MT_Connect;
+    DLL_MT_NoParams   MT_Disconnect;
+    DLL_MT_Version    MT_Version;
+    DLL_MT_Bool       MT_IsMotorRunning;
+    //DLL_MT_NoParams   MT_StartMotor;
+    DLL_MT_NoParams   MT_StopMotor;
+
+    DLL_MT_Double     MT_GetForce;
+    DLL_MT_Double     MT_GetPosition;
+    DLL_MT_Double     MT_GetExtension;
+
+    DLL_MT_Integer    MT_GetMotorSpeedIndex;
+
+    DLL_MT_SetDouble  MT_GotoLoad;
+    DLL_MT_SetDouble  MT_GotoAbsolutePosition;
+    DLL_MT_SetDouble  MT_GotoExtension;
+
+    DLL_MT_NoParams   MT_ModeTensile;
+    DLL_MT_NoParams   MT_ModeCompressive;
+    DLL_MT_SetInteger MT_SetMotorSpeed;
+
+    /* ===== Steuerflags für Poller ===== */
+    volatile bool doSetMode = false;
+    int setModeValue = 0;
+
+    volatile bool doSetMotorSpeed = false;
+    int setMotorSpeedValue = 0;
+
+    volatile bool doStopMotor = false;
+
+    volatile bool doGotoAbsolutePosition = false;
+    double gotoAbsolutePositionValue = 0.0;
+
+    volatile bool doGotoLoad = false;
+    double gotoLoadValue = 0.0;
+
+    volatile bool doGotoExtension = false;
+    double gotoExtensionValue = 0.0;
+
+    /* Poller */
+    static void pollerTaskC(void *drvPvt);
+    void pollerTask();
+
+    /* Initialisierung */
+    bool initDLL();
 };
 
 /** Constructor for the Microtest class
   */
-Microtest::Microtest(const char *portName)
+Microtest::Microtest(const char *portName, const char *dllPath)
     : asynPortDriver(portName, 1, 1,
                      asynInt32Mask | asynFloat64Mask | asynDrvUserMask,  // Interfaces that we implement
                      asynInt32Mask | asynFloat64Mask,    // Interfaces that do callbacks
-                     ASYN_MULTIDEVICE | ASYN_CANBLOCK, 1, /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=1, autoConnect=1 */
-                     // this is how to start without ASYN_CANBLOCK
-                     //ASYN_MULTIDEVICE, 1, /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=1, autoConnect=1 */
-                     0, 0) /* Default priority and stack size */
+                     ASYN_CANBLOCK, 1, /* ASYN_CANBLOCK=1, ASYN_MULTIDEVICE=1, autoConnect=1 */
+                     0, 0), /* Default priority and stack size */
+    hLib(NULL),
+    dllPath_(dllPath)
 {
     createParam(Mode,			    asynParamInt32,		&Mode_);
     createParam(StopMotor,			asynParamInt32,		&StopMotor_);
     createParam(MotorSpeed,			asynParamInt32,		&MotorSpeed_);
     createParam(MotorSpeedRBV,		asynParamInt32,		&MotorSpeedRBV_);
     createParam(MovingDone,		    asynParamInt32,	    &MovingDone_);
+    createParam(UseForceStability,	asynParamInt32,		&UseForceStability_);
     createParam(Load,			    asynParamFloat64,	&Load_);
     createParam(Force,			    asynParamFloat64,	&Force_);
     createParam(Extension,		    asynParamFloat64,	&Extension_);
     createParam(ExtensionRBV,		asynParamFloat64,	&ExtensionRBV_);
     createParam(StartPosition,	    asynParamFloat64,	&StartPosition_);
     createParam(AbsolutePosition,	asynParamFloat64,	&AbsolutePosition_);
+    createParam(ForceDeltaPercent,	asynParamFloat64,	&ForceDeltaPercent_);
+    createParam(ForceDeltaPercentRBV,   asynParamFloat64,	&ForceDeltaPercentRBV_);
+    createParam(ForceStableTime,	asynParamFloat64,	&ForceStableTime_);
+    createParam(ForceStableTimeRBV,	asynParamFloat64,	&ForceStableTimeRBV_);
+    createParam(ForceThreshold,	    asynParamFloat64,	&ForceThreshold_);
 
-    loadLibrary();
+    dllLock = epicsMutexCreate();
 
-	// Get the version information for the DLL
-	int vermaj, vermin;// speedIndex;
-	MT_Version(&vermaj, &vermin);
-	std::cout << "Microtest DLL";
-	std::cout << "  Version " << vermaj << "." << vermin << std::endl;
-
-	// set the proper motor speed at start
-    MT_Connect();
-	setIntegerParam(MotorSpeed_, MT_GetMotorSpeedIndex());
-
-    // Free the Library, otherwise it will be blocked
-    FreeLibrary((HMODULE)hLib);
+    /* start poller-thread*/
+    pollerRunning = true;
+    pollerThreadId = epicsThreadCreate(
+        "MicrotestPoller",
+        epicsThreadPriorityMedium,
+        epicsThreadGetStackSize(epicsThreadStackSmall),
+                                       (EPICSTHREADFUNC)pollerTaskC,
+                                       this
+    );
 }
 
-void Microtest::loadLibrary()
+/* Destructor */
+Microtest::~Microtest()
 {
-    // we need to execute this function before every call to the Microtest (maybe there is a better way to code it ...)
+    pollerRunning = false;
 
-    // Load the MicrotestMT64.dll DLL
-    hLib=LoadLibraryW(L"C:\\Program Files (x86)\\Deben UK Ltd\\Microtest DLL\\DebenMT64.dll");
-    if (hLib==NULL)
-    {
-        std::cout << "Unable to load library!" << std::endl;
+    if (pollerThreadId) {
+        epicsThreadSleep(0.3);  // Thread sauber beenden lassen
     }
 
-    // Get the functions from the DLL
-    MT_Connect 				= (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_Connect");
-    MT_Disconnect			= (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_Disconnect");
-    MT_Version 				= (DLL_MT_Version   )GetProcAddress((HMODULE)hLib, "MT_Version");
-    MT_IsMotorRunning       = (DLL_MT_Bool      )GetProcAddress((HMODULE)hLib, "MT_IsMotorRunning");
-    MT_StartMotor           = (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_StartMotor");
-    MT_StopMotor            = (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_StopMotor");
-    MT_GetForce				= (DLL_MT_Double    )GetProcAddress((HMODULE)hLib, "MT_GetForce");
-    MT_GetPosition          = (DLL_MT_Double    )GetProcAddress((HMODULE)hLib, "MT_GetPosition");
-    MT_GetExtension         = (DLL_MT_Double    )GetProcAddress((HMODULE)hLib, "MT_GetExtension");
-    MT_GetMotorSpeedIndex   = (DLL_MT_Integer   )GetProcAddress((HMODULE)hLib, "MT_GetMotorSpeedIndex");
-    MT_GotoLoad             = (DLL_MT_SetDouble )GetProcAddress((HMODULE)hLib, "MT_GotoLoad");
-    MT_GotoAbsolutePosition = (DLL_MT_SetDouble )GetProcAddress((HMODULE)hLib, "MT_GotoAbsolutePosition");
-    MT_GotoExtension        = (DLL_MT_SetDouble )GetProcAddress((HMODULE)hLib, "MT_GotoExtension");
-    MT_ModeTensile          = (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_ModeTensile");
-    MT_ModeCompressive      = (DLL_MT_NoParams  )GetProcAddress((HMODULE)hLib, "MT_ModeCompressive");
-    MT_SetMotorSpeed        = (DLL_MT_SetInteger)GetProcAddress((HMODULE)hLib, "MT_SetMotorSpeed");
+    if (hLib) {
+        epicsMutexLock(dllLock);
+        MT_Disconnect();
+        epicsMutexUnlock(dllLock);
+        FreeLibrary(hLib);
+    }
+    epicsMutexDestroy(dllLock);
 }
 
-asynStatus Microtest::readInt32(asynUser *pasynUser, epicsInt32 *value)
+void Microtest::pollerTaskC(void *drvPvt)
 {
-    loadLibrary();
+    Microtest *pDrv = static_cast<Microtest *>(drvPvt);
+    pDrv->pollerTask();
+}
+
+bool Microtest::initDLL()
+{
+    if (dllPath_.empty()) return false;
+
+    hLib = LoadLibraryA(dllPath_.c_str());
+    if (!hLib) {
+        printf("Microtest: cannot load DLL at %s\n", dllPath_.c_str());
+        return false;
+    }
+
+    MT_Connect              = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_Connect");
+    MT_Disconnect           = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_Disconnect");
+    MT_Version              = (DLL_MT_Version)    GetProcAddress(hLib, "MT_Version");
+    MT_IsMotorRunning       = (DLL_MT_Bool)       GetProcAddress(hLib, "MT_IsMotorRunning");
+    //MT_StartMotor           = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_StartMotor");
+    MT_StopMotor            = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_StopMotor");
+    MT_GetForce             = (DLL_MT_Double)     GetProcAddress(hLib, "MT_GetForce");
+    MT_GetPosition          = (DLL_MT_Double)     GetProcAddress(hLib, "MT_GetPosition");
+    MT_GetExtension         = (DLL_MT_Double)     GetProcAddress(hLib, "MT_GetExtension");
+    MT_GetMotorSpeedIndex   = (DLL_MT_Integer)    GetProcAddress(hLib, "MT_GetMotorSpeedIndex");
+    MT_GotoLoad             = (DLL_MT_SetDouble)  GetProcAddress(hLib, "MT_GotoLoad");
+    MT_GotoAbsolutePosition = (DLL_MT_SetDouble)  GetProcAddress(hLib, "MT_GotoAbsolutePosition");
+    MT_GotoExtension        = (DLL_MT_SetDouble)  GetProcAddress(hLib, "MT_GotoExtension");
+    MT_ModeTensile          = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_ModeTensile");
+    MT_ModeCompressive      = (DLL_MT_NoParams)   GetProcAddress(hLib, "MT_ModeCompressive");
+    MT_SetMotorSpeed        = (DLL_MT_SetInteger) GetProcAddress(hLib, "MT_SetMotorSpeed");
+
+    if (!MT_Connect) {
+        printf("Microtest: missing required function in DLL\n");
+        FreeLibrary(hLib);
+        hLib = NULL;
+        return false;
+    }
+
+    return true;
+}
+
+void Microtest::pollerTask()
+{
+    if (!initDLL()) {
+        printf("Microtest: DLL initialization failed\n");
+        return;
+    }
+
+    epicsMutexLock(dllLock);
     MT_Connect();
+    epicsMutexUnlock(dllLock);
 
-    int addr;
-    int function = pasynUser->reason;
-    int status=0;
-    int intVal;
-    //static const char *functionName = "readInt32";
+    int maj = 0, min = 0;
+    MT_Version(&maj, &min);
+    printf("Microtest DLL version %d.%d\n", maj, min);
 
-    this->getAddress(pasynUser, &addr);
+    /* --- Force stability tracking --- */
+    double stableTime = 0.0;
+    double lastForce  = 0.0;
+    double pct = 0.0;
+    double forceThreshold;
+    double stableDeltaPct;
+    double stableTimeReq;
+    const double dt    = 0.1;  // wie Poll-Periode
+    int    stableEnable;
+    bool   newStabilityCycle = false;
 
-    // Analog input function
-    if (function == MotorSpeedRBV_)
-    {
-        // read the motor speed index at start and set the corresponding record
-        intVal = MT_GetMotorSpeedIndex();
-        *value = intVal;
-        setIntegerParam(addr, MotorSpeedRBV_, *value);
-    }
-    if (function == MovingDone_)
-    {
-        intVal = MT_IsMotorRunning();
-        *value = intVal;
-        if (*value)
-        {
-            *value = 0;
-            setIntegerParam(addr, MovingDone_, *value);
+    while (pollerRunning) {
+
+        epicsMutexLock(dllLock);
+
+        if (doSetMode) {
+            setModeValue ? MT_ModeCompressive() : MT_ModeTensile();
+            doSetMode = false;
         }
-        else
-        {
-            *value = 1;
-            setIntegerParam(addr, MovingDone_, *value);
+        if (doSetMotorSpeed) {
+            MT_SetMotorSpeed(setMotorSpeedValue);
+            doSetMotorSpeed = false;
         }
+        if (doStopMotor) {
+            MT_StopMotor();
+            doStopMotor = false;
+        }
+
+        if (doGotoAbsolutePosition) {
+            MT_GotoAbsolutePosition(gotoAbsolutePositionValue);
+            doGotoAbsolutePosition = false;
+        }
+        if (doGotoLoad) {
+            MT_GotoLoad(gotoLoadValue);
+            doGotoLoad = false;
+        }
+        if (doGotoExtension) {
+            MT_GotoExtension(gotoExtensionValue);
+            doGotoExtension = false;
+        }
+
+        // ----- regular polling -----
+        double force      = MT_GetForce();
+        double position   = MT_GetPosition();
+        double extension  = MT_GetExtension();
+        int    speed      = MT_GetMotorSpeedIndex();
+        int    running    = MT_IsMotorRunning();
+
+        epicsMutexUnlock(dllLock);
+
+        // ----- Update EPICS parameters -----
+        setDoubleParam(Force_,          force);
+        setDoubleParam(ExtensionRBV_,   extension);
+        setDoubleParam(StartPosition_,  position);
+        setIntegerParam(MotorSpeedRBV_, speed);
+
+        getIntegerParam(UseForceStability_, &stableEnable);
+        getDoubleParam(ForceThreshold_,     &forceThreshold);
+        getDoubleParam(ForceStableTime_,    &stableTimeReq);
+
+        if (stableEnable && running && (force >= forceThreshold)) {
+            newStabilityCycle = true;
+        } else if (stableEnable && running && (force < forceThreshold)) {
+            newStabilityCycle = false;
+        }
+
+        if ((!running) && newStabilityCycle) {
+            getDoubleParam(ForceDeltaPercent_, &stableDeltaPct);
+            //printf("ForceDeltaPercent: %f\n", stableDeltaPct);
+
+            double diff = fabs(force - lastForce);
+            pct  = (lastForce != 0.0) ? fabs(diff / lastForce) * 100.0 : 0.0;
+
+            if (pct <= stableDeltaPct) {
+                stableTime += dt;
+            } else {
+                stableTime = 0.0;
+            }
+
+            lastForce = force;
+
+            if (stableTime >= stableTimeReq) {
+                newStabilityCycle = false;
+            }
+        }
+        setDoubleParam(ForceDeltaPercentRBV_, pct);
+        setDoubleParam(ForceStableTimeRBV_, stableTime);
+        // Motor is done only if it has stopped AND
+        // force stability is either disabled or fulfilled or force is below threshold
+        int done = (!running) && ( (!stableEnable) || (stableTime >= stableTimeReq) || (force < forceThreshold) );
+        setIntegerParam(MovingDone_, done);
+
+        callParamCallbacks();
+
+        epicsThreadSleep(dt);   // 100 ms
     }
 
-    // Other functions we call the base class method
-    else
-    {
-        status = asynPortDriver::readInt32(pasynUser, value);
-    }
-
-    callParamCallbacks(addr);
-
-    // Free the Library, otherwise it will be blocked
-    FreeLibrary((HMODULE)hLib);
-
-    return (status==0) ? asynSuccess : asynError;
+    epicsMutexLock(dllLock);
+    MT_Disconnect();
+    epicsMutexUnlock(dllLock);
 }
 
 asynStatus Microtest::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
-    loadLibrary();
-    MT_Connect();
-
-    int addr;
     int function = pasynUser->reason;
-    int status = 0;
-    static const char *functionName = "writeInt32";
 
-    this->getAddress(pasynUser, &addr);
-    setIntegerParam(addr, function, value);
+    // Set the parameter in the parameter library.
+    setIntegerParam(function, value);
 
     if (function == Mode_)
     {
-        if (value)
-        {
-            MT_ModeCompressive();
-        }
-        else
-        {
-            MT_ModeTensile();
-        }
+        setModeValue = value;
+        doSetMode = true;
     }
     if (function == StopMotor_)
     {
-        MT_StopMotor();
+        doStopMotor = true;
     }
     if (function == MotorSpeed_)
     {
-        MT_SetMotorSpeed(value);
+        setMotorSpeedValue = value;
+        doSetMotorSpeed = true;
     }
 
-    callParamCallbacks(addr);
+    // Notify records
+    callParamCallbacks();
 
-    // Free the Library, otherwise it will be blocked
-    FreeLibrary((HMODULE)hLib);
-
-    if (status == 0)
-    {
-        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER,
-                  "%s:%s, port %s, wrote %d to address %d\n",
-                  driverName, functionName, this->portName, value, addr);
-    }
-    else
-    {
-        asynPrint(pasynUser, ASYN_TRACE_ERROR,
-                  "%s:%s, port %s, ERROR writing %d to address %d, status=%d\n",
-                  driverName, functionName, this->portName, value, addr, status);
-    }
-    return (status==0) ? asynSuccess : asynError;
-}
-
-asynStatus Microtest::readFloat64(asynUser *pasynUser, epicsFloat64 *value)
-{
-    loadLibrary();
-    MT_Connect();
-
-    int addr;
-    int function = pasynUser->reason;
-    int status = 0;
-    double doubleVal = 0;
-    //static const char *functionName = "readFloat64";
-
-    this->getAddress(pasynUser, &addr);
-
-    // Analog input function
-    if (function == Force_)
-    {
-        doubleVal = MT_GetForce();
-        //std::cout << "Force " << doubleVal << "N" << std::endl;
-        *value = doubleVal;
-        setDoubleParam(addr, Force_, *value);
-    }
-    if (function == ExtensionRBV_)
-    {
-        doubleVal = MT_GetExtension();
-        *value = doubleVal;
-        setDoubleParam(addr, ExtensionRBV_, *value);
-    }
-    if (function == StartPosition_)
-    {
-        doubleVal = MT_GetPosition();
-        *value = doubleVal;
-        setDoubleParam(addr, StartPosition_, *value);
-    }
-
-    // Other functions we call the base class method
-    else
-    {
-        status = asynPortDriver::readFloat64(pasynUser, value);
-    }
-
-    callParamCallbacks(addr);
-
-    // Free the Library, otherwise it will be blocked
-    FreeLibrary((HMODULE)hLib);
-
-    return (status==0) ? asynSuccess : asynError;
+    return asynSuccess;
 }
 
 asynStatus Microtest::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
-    loadLibrary();
-    MT_Connect();
-
-    int addr;
     int function = pasynUser->reason;
-    asynStatus status = asynSuccess;
-    const char* functionName = "writeFloat64";
-
-    getAddress(pasynUser, &addr);
 
     // Set the parameter in the parameter library.
-    status = setDoubleParam(addr, function, value);
+    setDoubleParam(function, value);
 
+    // Set command flags (executed in poller thread)
     if (function == AbsolutePosition_)
     {
-        //std::cout << "Param " << value << std::endl;
-        MT_GotoAbsolutePosition(value);
+        gotoAbsolutePositionValue = value;
+        doGotoAbsolutePosition = true;
     }
     if (function == Load_)
     {
-        MT_GotoLoad(value);
+        gotoLoadValue = value;
+        doGotoLoad = true;
     }
     if (function == Extension_)
     {
-        MT_GotoExtension(value);
+        gotoExtensionValue = value;
+        doGotoExtension = true;
     }
 
-    // Do callbacks so higher layers see any changes
-    status = callParamCallbacks();
-    // Free the Library, otherwise it will be blocked
-    FreeLibrary((HMODULE)hLib);
+    // Notify records
+    callParamCallbacks();
 
-    if (status)
-        asynPrint(pasynUser, ASYN_TRACE_ERROR,
-                  "%s:%s, status=%d function=%d, value=%f\n",
-                  driverName, functionName, status, function, value);
-    else
-        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER,
-                  "%s:%s: function=%d, value=%f\n",
-                  driverName, functionName, function, value);
-
-    return (status==0) ? asynSuccess : asynError;
+    return asynSuccess;
 }
 
 
 /** Configuration command, called directly or from iocsh */
-extern "C" int MicrotestConfig(const char *portName)
+extern "C" int MicrotestConfig(const char *portName, const char *dllPath)
 {
-    Microtest *pMicrotest = new Microtest(portName);
-    pMicrotest = NULL;  /* This is just to avoid compiler warnings */
+    //Microtest *pMicrotest = new Microtest(portName, dllPath);
+    new Microtest(portName, dllPath);
     return(asynSuccess);
 }
 
 
 static const iocshArg configArg0 = { "Port name",      iocshArgString};
-static const iocshArg * const configArgs[] = {&configArg0};
-static const iocshFuncDef configFuncDef = {"MicrotestConfig", 1, configArgs};
+static const iocshArg configArg1 = { "DLL path",  iocshArgString };
+static const iocshArg * const configArgs[] = {&configArg0, &configArg1};
+static const iocshFuncDef configFuncDef = {"MicrotestConfig", 2, configArgs};
 static void configCallFunc(const iocshArgBuf *args)
 {
-    MicrotestConfig(args[0].sval);
+    MicrotestConfig(args[0].sval, args[1].sval);
 }
 
 void drvMicrotestRegister(void)

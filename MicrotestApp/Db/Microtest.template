@@ -2,7 +2,7 @@
 
 record(bo,		"$(P):Mode") {
     field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),$(ADDR))Mode")
+    field(OUT,  "@asyn($(PORT))Mode")
     field(PINI, "NO")
     field(VAL,  "0")
 	field(ZNAM, "Tensile")
@@ -11,7 +11,7 @@ record(bo,		"$(P):Mode") {
 
 record(mbbo,    "$(P):MotorSpeed") {
     field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),$(ADDR))MotorSpeed")
+    field(OUT,  "@asyn($(PORT))MotorSpeed")
     field(PINI, "NO")
     field(ZRST, "0.1 mm/min")
     field(ZRVL, "0")
@@ -27,7 +27,7 @@ record(mbbo,    "$(P):MotorSpeed") {
 
 record(mbbi,    "$(P):MotorSpeed_RBV") {
     field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT),$(ADDR))MotorSpeed_RBV")
+    field(INP,  "@asyn($(PORT))MotorSpeed_RBV")
     field(ZRST, "0.1 mm/min")
     field(ZRVL, "0")
     field(ONST, "0.2 mm/min")
@@ -38,20 +38,19 @@ record(mbbi,    "$(P):MotorSpeed_RBV") {
     field(THVL, "3")
     field(FRST, "1.0 mm/min")
     field(FRVL, "4")
-    field(SCAN, "1 second")
+    field(SCAN, ".1 second")
 }
 
 record(ai,		"$(P):MovingDone")
 {
     field(DTYP, "asynInt32")
-    field(INP,  "@asyn($(PORT),$(ADDR))MovingDone")
-    field(PINI, "YES")
-    field(SCAN, "1 second")
+    field(INP,  "@asyn($(PORT))MovingDone")
+    field(SCAN, ".1 second")
 }
 
 record(bo,		"$(P):StopMotor") {
     field(DTYP, "asynInt32")
-    field(OUT,  "@asyn($(PORT),$(ADDR))StopMotor")
+    field(OUT,  "@asyn($(PORT))StopMotor")
     field(PINI, "NO")
     field(VAL,  "0")
     field(ZNAM, "Start")
@@ -62,17 +61,17 @@ record(ao,		"$(P):Load")
 {
     field(PINI, "NO")
     field(DTYP, "asynFloat64")
-    field(OUT,  "@asyn($(PORT),$(ADDR))Load")
+    field(OUT,  "@asyn($(PORT))Load")
     field(PREC, "2")
 }
 
 record(ai,		"$(P):Force_RBV")
 {
     field(DTYP, "asynFloat64")
-    field(INP,  "@asyn($(PORT),$(ADDR))Force_RBV")
+    field(INP,  "@asyn($(PORT))Force_RBV")
     field(PINI, "NO")
     field(PREC, 2)
-    field(SCAN, "1 second")
+    field(SCAN, ".1 second")
     field(LOLO, -9000)
     field(LLSV, "MAJOR")
 }
@@ -81,33 +80,32 @@ record(ao,		"$(P):Extension")
 {
     field(PINI, "NO")
     field(DTYP, "asynFloat64")
-    field(OUT,  "@asyn($(PORT),$(ADDR))Extension")
+    field(OUT,  "@asyn($(PORT))Extension")
     field(PREC, "3")
 }
 
 record(ai,		"$(P):Extension_RBV")
 {
     field(DTYP, "asynFloat64")
-    field(INP,  "@asyn($(PORT),$(ADDR))Extension_RBV")
-    field(PINI, "YES")
+    field(INP,  "@asyn($(PORT))Extension_RBV")
     field(PREC, 3)
-    field(SCAN, "1 second")
+    field(SCAN, ".1 second")
 }
 
 record(ai,		"$(P):StartPosition")
 {
     field(DTYP, "asynFloat64")
-    field(INP,  "@asyn($(PORT),$(ADDR))StartPosition")
+    field(INP,  "@asyn($(PORT))StartPosition")
     field(PINI, "NO")
     field(PREC, 3)
-    field(SCAN, "1 second")
+    field(SCAN, ".1 second")
 }
 
 record(ao,		"$(P):AbsolutePosition")
 {
     field(PINI, "NO")
     field(DTYP, "asynFloat64")
-    field(OUT,  "@asyn($(PORT),$(ADDR))AbsolutePosition")
+    field(OUT,  "@asyn($(PORT))AbsolutePosition")
     field(PREC, "3")
 }
 
@@ -118,55 +116,115 @@ record(calc,	"$(P):AbsolutePosition_RBV")
     field(INPB, "$(P):Extension_RBV  CP MS")
     field(INPC, "$(P):Mode NPP MS")
     field(PREC, 3)
-    field(PINI, "YES")
 }
 
 # Soft motors: absolute, extension, load
 
 record(motor,   "$(P):LoadMotor")
 {
-  field(DTYP, "Soft Channel")
-  field(DESC, "input load")
-  field(OUT, "$(P):Load PP MS")
-  field(RDBL, "$(P):Force_RBV NPP MS")
-  field(URIP, "Yes")
-  field(RRES, "1")
-  field(EGU, "N")
-  field(RMOD, "3")
-  field(MRES, "0.01")
-  field(RDBD, "0.1")
-  field(STOO, "$(P):StopMotor PP")
-  field(DINP, "$(P):MovingDone NPP NMS")
+    field(DTYP, "Soft Channel")
+    field(DESC, "input load")
+    field(OUT, "$(P):Load PP MS")
+    field(RDBL, "$(P):Force_RBV NPP MS")
+    field(URIP, "Yes")
+    field(RRES, "1")
+    field(EGU, "N")
+    field(RMOD, "3")
+    field(MRES, "0.01")
+    field(RDBD, "0.1")
+    field(STOO, "$(P):StopMotor PP")
+    field(DINP, "$(P):MovingDone NPP NMS")
 }
 
 record(motor,   "$(P):AbsoluteMotor")
 {
-  field(DTYP, "Soft Channel")
-  field(DESC, "input absolute position")
-  field(OUT, "$(P):AbsolutePosition PP MS")
-  field(RDBL, "$(P):AbsolutePosition_RBV NPP MS")
-  field(URIP, "Yes")
-  field(RRES, "1")
-  field(EGU, "mm")
-  field(RMOD, "3")
-  field(MRES, "0.001")
-  field(RDBD, "0.01")
-  field(STOO, "$(P):StopMotor PP")
-  field(DINP, "$(P):MovingDone NPP NMS")
+    field(DTYP, "Soft Channel")
+    field(DESC, "input absolute position")
+    field(OUT, "$(P):AbsolutePosition PP MS")
+    field(RDBL, "$(P):AbsolutePosition_RBV NPP MS")
+    field(URIP, "Yes")
+    field(RRES, "1")
+    field(EGU, "mm")
+    field(RMOD, "3")
+    field(MRES, "0.001")
+    field(RDBD, "0.01")
+    field(STOO, "$(P):StopMotor PP")
+    field(DINP, "$(P):MovingDone NPP NMS")
 }
 
 record(motor,   "$(P):ExtensionMotor")
 {
-  field(DTYP, "Soft Channel")
-  field(DESC, "input desired extension")
-  field(OUT, "$(P):Extension PP MS")
-  field(RDBL, "$(P):Extension_RBV NPP MS")
-  field(URIP, "Yes")
-  field(RRES, "1")
-  field(EGU, "mm")
-  field(RMOD, "3")
-  field(MRES, "0.001")
-  field(RDBD, "0.01")
-  field(STOO, "$(P):StopMotor PP")
-  field(DINP, "$(P):MovingDone NPP NMS")
+    field(DTYP, "Soft Channel")
+    field(DESC, "input desired extension")
+    field(OUT, "$(P):Extension PP MS")
+    field(RDBL, "$(P):Extension_RBV NPP MS")
+    field(URIP, "Yes")
+    field(RRES, "1")
+    field(EGU, "mm")
+    field(RMOD, "3")
+    field(MRES, "0.001")
+    field(RDBD, "0.01")
+    field(STOO, "$(P):StopMotor PP")
+    field(DINP, "$(P):MovingDone NPP NMS")
+}
+
+# Enable / Disable Force-based done condition
+record(bo, "$(P):UseForceStability")
+{
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT))UseForceStability")
+    field(ZNAM, "Off")
+    field(ONAM, "On")
+    field(VAL,  "0")
+}
+
+# Force threshold, below no action
+record(ao, "$(P):ForceThreshold")
+{
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT))ForceThreshold")
+    field(PREC, 2)
+    field(PINI, "YES")
+    field(VAL,  "50.0")
+}
+
+# Allowed force change in percent
+record(ao, "$(P):ForceDeltaPercent")
+{
+    field(DESC, "Allowed force change [%]")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT))ForceDeltaPercent")
+    field(PREC, 2)
+    field(PINI, "YES")
+    field(VAL,  "1.0")
+}
+
+# Allowed force change in percent
+record(ai, "$(P):ForceDeltaPercent_RBV")
+{
+    field(DESC, "Allowed force change readback [%]")
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT))ForceDeltaPercent_RBV")
+    field(SCAN, ".1 second")
+    field(PREC, 2)
+}
+
+# Required stable time in seconds
+record(ao, "$(P):ForceStableTime")
+{
+    field(DESC, "Stable time [s]")
+    field(DTYP, "asynFloat64")
+    field(OUT,  "@asyn($(PORT))ForceStableTime")
+    field(PREC, 1)
+    field(PINI, "YES")
+    field(VAL,  "2.0")
+}
+
+record(ai, "$(P):ForceStableTime_RBV")
+{
+    field(DESC, "Stable time readback [s]")
+    field(DTYP, "asynFloat64")
+    field(INP,  "@asyn($(PORT))ForceStableTime_RBV")
+    field(SCAN, ".1 second")
+    field(PREC, 2)
 }
