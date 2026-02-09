@@ -1,7 +1,7 @@
 *~
 O.*/
 /db
-/bin
+**/bin/
 /dbd
 /lib
 *.tags
