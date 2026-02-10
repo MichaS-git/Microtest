@@ -13,10 +13,10 @@ LIBRARY_IOC += Microtest
 # xxxRecord.h will be created from xxxRecord.dbd
 #DBDINC += xxxRecord
 # install Microtest.dbd into <top>/dbd
-DBD += Microtest.dbd
+DBD += MicrotestSupport.dbd
 
 # specify all source files to be compiled and added to the library
-Microtest_SRCS += MicrotestDriver.cpp
+SRCS += MicrotestDriver.cpp
 
 Microtest_LIBS += asyn
 

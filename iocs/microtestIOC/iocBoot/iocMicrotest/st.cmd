@@ -1,4 +1,4 @@
-#!../../bin/windows-x64-static/Microtest
+#!../../bin/windows-x64-static/microtest
 
 #- You may have to change Microtest to something else
 #- everywhere it appears in this file
@@ -8,8 +8,8 @@
 cd "${TOP}"
 
 ## Register all support components
-dbLoadDatabase "dbd/Microtest.dbd"
-Microtest_registerRecordDeviceDriver pdbbase
+dbLoadDatabase "dbd/microtest.dbd"
+microtest_registerRecordDeviceDriver pdbbase
 
 # The port name for the device
 epicsEnvSet("PORT", "Microtest")
