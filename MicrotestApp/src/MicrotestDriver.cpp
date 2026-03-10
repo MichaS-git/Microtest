@@ -248,6 +248,7 @@ void Microtest::pollerTask()
     const double dt    = 0.1;  // wie Poll-Periode
     int    stableEnable;
     bool   newStabilityCycle = false;
+    const double VALUE_INVALID = -999.0;
 
     while (pollerRunning) {
 
@@ -289,9 +290,18 @@ void Microtest::pollerTask()
         epicsMutexUnlock(dllLock);
 
         // ----- Update EPICS parameters -----
-        setDoubleParam(Force_,          force);
-        setDoubleParam(ExtensionRBV_,   extension);
-        setDoubleParam(StartPosition_,  position);
+
+        // a value lower than -999 indicates an error
+        // dont't update the value then
+        if (force > VALUE_INVALID) {
+            setDoubleParam(Force_,          force);
+        }
+        if (position > VALUE_INVALID) {
+            setDoubleParam(StartPosition_,  position);
+        }
+        if (extension > VALUE_INVALID) {
+            setDoubleParam(ExtensionRBV_,   extension);
+        }
         setIntegerParam(MotorSpeedRBV_, speed);
 
         getIntegerParam(UseForceStability_, &stableEnable);
@@ -300,11 +310,11 @@ void Microtest::pollerTask()
 
         if (stableEnable && running && (force >= forceThreshold)) {
             newStabilityCycle = true;
-        } else if (stableEnable && running && (force < forceThreshold)) {
+        } else if (stableEnable && running && (force > VALUE_INVALID) && (force < forceThreshold)) {
             newStabilityCycle = false;
         }
 
-        if ((!running) && newStabilityCycle) {
+        if ((!running) && newStabilityCycle && (force > VALUE_INVALID)) {
             getDoubleParam(ForceDeltaPercent_, &stableDeltaPct);
             //printf("ForceDeltaPercent: %f\n", stableDeltaPct);
 
@@ -327,7 +337,7 @@ void Microtest::pollerTask()
         setDoubleParam(ForceStableTimeRBV_, stableTime);
         // Motor is done only if it has stopped AND
         // force stability is either disabled or fulfilled or force is below threshold
-        int done = (!running) && ( (!stableEnable) || (stableTime >= stableTimeReq) || (force < forceThreshold) );
+        int done = (!running) && ( (!stableEnable) || (stableTime >= stableTimeReq) || (force > VALUE_INVALID && force < forceThreshold) );
         setIntegerParam(MovingDone_, done);
 
         callParamCallbacks();
